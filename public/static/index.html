@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Socket.IO chat</title>
+  <style>
+    body {
+      margin: 0;
+      padding-bottom: 3rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    #form {
+      background: rgba(0, 0, 0, 0.15);
+      padding: 0.25rem;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      height: 3rem;
+      box-sizing: border-box;
+      backdrop-filter: blur(10px);
+    }
+
+    #input {
+      border: none;
+      padding: 0 1rem;
+      flex-grow: 1;
+      border-radius: 2rem;
+      margin: 0.25rem;
+    }
+
+    #input:focus {
+      outline: none;
+    }
+
+    #form>button {
+      background: #333;
+      border: none;
+      padding: 0 1rem;
+      margin: 0.25rem;
+      border-radius: 3px;
+      outline: none;
+      color: #fff;
+    }
+
+    #messages {
+      list-style-type: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    #messages>li {
+      padding: 0.5rem 1rem;
+    }
+
+    #messages>li:nth-child(odd) {
+      background: #efefef;
+    }
+  </style>
+</head>
+
+<body>
+  <h3>
+    Online Users:
+  </h3>
+  <form action="http://localhost:4000/logout" method="get">
+    <input type="submit" value="Log out">
+  </form>
+  <ul id="clients">
+    <li><button id="all-btn">All</button></li>
+  </ul>
+
+  <hr>
+  <ul id="messages"></ul>
+  <form id="form" action="">
+    <input id="input" autocomplete="off" /><button>Send</button>
+  </form>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io("http://localhost:4000");
+    const form = document.getElementById('form');
+    const input = document.getElementById('input');
+    const messages = document.getElementById('messages');
+    const users = document.getElementById("clients");
+    const sendAll = document.getElementById("all-btn");
+
+    let reciever = "all"
+
+    sendAll.addEventListener("click", (e)=>{
+      reciever = "all"
+      alert("Messages will be braodcasted to all clients")
+    })
+
+    let clientName = document.cookie.split("=")[1]
+    socket.emit("add-user", clientName)
+    socket.on("online-users", (data) => {
+      data.forEach(element => {
+
+        const frag = document.createDocumentFragment();
+        const btn = frag.appendChild(document.createElement('li'))
+          .appendChild(document.createElement('button'))
+        btn.textContent = element
+        btn.addEventListener('click', function (e) {
+          reciever = e.target.innerHTML;
+          alert(`Current reciever selected to ${reciever}`)
+        })
+        users.appendChild(frag);
+      });
+    })
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (input.value) {
+        const item = document.createElement('li');
+        item.textContent = `You | Message- ${input.value}`;
+        messages.appendChild(item);
+        window.scrollTo(0, document.body.scrollHeight);
+        socket.emit('chat-message', {
+          to: reciever,
+          from: clientName,
+          msg: input.value
+        });
+        input.value = '';
+      }
+    });
+
+    socket.on('chat-message', (data) => {
+      const item = document.createElement('li');
+      item.textContent = `Sender: ${data.from} Message- ${data.msg}`;
+      messages.appendChild(item);
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+    socket.on('msg-recieve', (data) => {
+      const item = document.createElement('li');
+      item.textContent = `Sender: ${data.from} Message- ${data.msg}`;
+      messages.appendChild(item);
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+  </script>
+</body>
+
+</html>

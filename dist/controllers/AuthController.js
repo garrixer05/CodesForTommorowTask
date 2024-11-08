@@ -31,13 +31,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.loginClient = exports.createClient = void 0;
+exports.logoutClient = exports.loginClient = exports.createClient = exports.blacklist = void 0;
 const client_1 = require("@prisma/client");
 const argon = __importStar(require("argon2"));
 const verifyToken_1 = require("../middlewares/verifyToken");
 const library_1 = require("@prisma/client/runtime/library");
+const node_path_1 = __importDefault(require("node:path"));
 const prisma = new client_1.PrismaClient();
+const users = new Map();
+exports.blacklist = new Map();
 const createClient = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { name, password } = req.body;
@@ -60,8 +66,9 @@ const createClient = (req, res) => __awaiter(void 0, void 0, void 0, function* (
     }
 });
 exports.createClient = createClient;
-const loginClient = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+const loginClient = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        console.log(req.body);
         const { name, password } = req.body;
         const user = yield prisma.client.findUnique({
             where: {
@@ -73,15 +80,38 @@ const loginClient = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             return res.send({ msg: "Incorrect credentials", status: false });
         }
         const signedUser = yield (0, verifyToken_1.signToken)(JSON.stringify(user));
-        res.writeHead(200, {
-            "set-cookie": `token=${signedUser}; HttpOnly`,
-            "access-control-allow-credentials": "true"
+        if (!users.get(user.id)) {
+            users.set(user.id, signedUser);
+            exports.blacklist.set(signedUser, false);
+        }
+        else {
+            let prevToken = users.get(user.id);
+            users.set(user.id, signedUser);
+            exports.blacklist.set(prevToken, true);
+            return res.send({ msg: "You've been logged out! Another log in detected for this username." });
+        }
+        res.cookie("token", signedUser, {
+            httpOnly: true
         });
-        res.end("Logged in");
+        res.cookie("clientName", user.name);
+        res.sendFile(node_path_1.default.join(__dirname, "../../public/static/index.html"), {
+            headers: {
+                "clientName": user.name
+            }
+        });
     }
     catch (error) {
         console.log(error);
     }
 });
 exports.loginClient = loginClient;
+const logoutClient = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const uid = req.body.id;
+    let t = users.get(uid);
+    users.delete(uid);
+    exports.blacklist.delete(t);
+    res.clearCookie("token");
+    return res.send({ msg: "Logged out successfully" });
+});
+exports.logoutClient = logoutClient;
 //# sourceMappingURL=AuthController.js.map
